@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import {
   Monitor, Building2, Users, LogOut, Plus, Pencil, Trash2,
-  Search, RefreshCw, Filter, LayoutDashboard, Server, Wifi,
-  CheckCircle2, AlertTriangle, XCircle, X, ShieldCheck
+  Search, RefreshCw, Server, CheckCircle2, AlertTriangle, X,
+  ShieldCheck, Laptop, FileText, Copy, Printer, Check
 } from 'lucide-react';
 
-// Logo fiel à imagem InfraTrack (Cubo de nós + Tipografia bicolor)
 function InfraTrackLogo({ light = false, size = 'md' }) {
   const iconSize = size === 'lg' ? 42 : 30;
   const textSize = size === 'lg' ? 'text-3xl' : 'text-xl';
@@ -41,6 +40,7 @@ export default function App() {
   const [ativos, setAtivos] = useState([]);
   const [setores, setSetores] = useState([]);
   const [responsaveis, setResponsaveis] = useState([]);
+  const [entregas, setEntregas] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
 
   // Filtros e Busca
@@ -53,12 +53,20 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [feedback, setFeedback] = useState({ type: '', msg: '' });
 
+  // Modal do Termo de Responsabilidade
+  const [termoSelecionado, setTermoSelecionado] = useState(null);
+  const [copiado, setCopiado] = useState(false);
+
   const [formAtivo, setFormAtivo] = useState({
     nome: '', tipo: 'Notebook', endereco_ip: '', endereco_mac: '',
     status: 'Ativo', id_setor: '', id_responsavel: ''
   });
   const [formSetor, setFormSetor] = useState({ nome: '', localizacao: '' });
   const [formResp, setFormResp] = useState({ nome: '', email: '', telefone: '' });
+  const [formEntrega, setFormEntrega] = useState({
+    colaborador: '', email_colaborador: '', usuario_rede: '',
+    modelo_maquina: '', numero_serie: '', data_entrega: new Date().toISOString().split('T')[0]
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -79,15 +87,17 @@ export default function App() {
 
   async function carregarDados() {
     setLoadingData(true);
-    const [resAtivos, resSetores, resResp] = await Promise.all([
+    const [resAtivos, resSetores, resResp, resEntregas] = await Promise.all([
       supabase.from('ativo').select('*, setor(nome, localizacao), responsavel(nome, email)').order('id_ativo', { ascending: false }),
       supabase.from('setor').select('*').order('nome'),
-      supabase.from('responsavel').select('*').order('nome')
+      supabase.from('responsavel').select('*').order('nome'),
+      supabase.from('entrega_equipamento').select('*').order('id_entrega', { ascending: false })
     ]);
 
     if (resAtivos.data) setAtivos(resAtivos.data);
     if (resSetores.data) setSetores(resSetores.data);
     if (resResp.data) setResponsaveis(resResp.data);
+    if (resEntregas.data) setEntregas(resEntregas.data);
     setLoadingData(false);
   }
 
@@ -109,8 +119,13 @@ export default function App() {
       });
     } else if (activeTab === 'setores') {
       setFormSetor({ nome: '', localizacao: '' });
-    } else {
+    } else if (activeTab === 'responsaveis') {
       setFormResp({ nome: '', email: '', telefone: '' });
+    } else {
+      setFormEntrega({
+        colaborador: '', email_colaborador: '', usuario_rede: '',
+        modelo_maquina: '', numero_serie: '', data_entrega: new Date().toISOString().split('T')[0]
+      });
     }
     setModalOpen(true);
   }
@@ -126,9 +141,19 @@ export default function App() {
     } else if (activeTab === 'setores') {
       setEditingId(item.id_setor);
       setFormSetor({ nome: item.nome, localizacao: item.localizacao || '' });
-    } else {
+    } else if (activeTab === 'responsaveis') {
       setEditingId(item.id_responsavel);
       setFormResp({ nome: item.nome, email: item.email, telefone: item.telefone || '' });
+    } else {
+      setEditingId(item.id_entrega);
+      setFormEntrega({
+        colaborador: item.colaborador,
+        email_colaborador: item.email_colaborador || '',
+        usuario_rede: item.usuario_rede,
+        modelo_maquina: item.modelo_maquina,
+        numero_serie: item.numero_serie,
+        data_entrega: item.data_entrega
+      });
     }
     setModalOpen(true);
   }
@@ -157,13 +182,27 @@ export default function App() {
         : await supabase.from('setor').insert([payload]);
       if (error) return showMsg('error', `Erro: ${error.message}`);
       showMsg('success', editingId ? 'Setor atualizado!' : 'Setor cadastrado!');
-    } else {
+    } else if (activeTab === 'responsaveis') {
       const payload = { nome: formResp.nome.trim(), email: formResp.email.trim(), telefone: formResp.telefone.trim() || null };
       const { error } = editingId
         ? await supabase.from('responsavel').update(payload).eq('id_responsavel', editingId)
         : await supabase.from('responsavel').insert([payload]);
       if (error) return showMsg('error', `Erro: ${error.message}`);
       showMsg('success', editingId ? 'Responsável atualizado!' : 'Responsável cadastrado!');
+    } else {
+      const payload = {
+        colaborador: formEntrega.colaborador.trim(),
+        email_colaborador: formEntrega.email_colaborador.trim() || null,
+        usuario_rede: formEntrega.usuario_rede.trim(),
+        modelo_maquina: formEntrega.modelo_maquina.trim(),
+        numero_serie: formEntrega.numero_serie.trim(),
+        data_entrega: formEntrega.data_entrega
+      };
+      const { error } = editingId
+        ? await supabase.from('entrega_equipamento').update(payload).eq('id_entrega', editingId)
+        : await supabase.from('entrega_equipamento').insert([payload]);
+      if (error) return showMsg('error', `Erro: ${error.message}`);
+      showMsg('success', editingId ? 'Entrega atualizada!' : 'Entrega de equipamento registrada!');
     }
     setModalOpen(false);
     setEditingId(null);
@@ -179,12 +218,46 @@ export default function App() {
       const { error } = await supabase.from('setor').delete().eq('id_setor', id);
       if (error) return showMsg('error', 'Não é possível excluir um setor que possui ativos vinculados.');
       showMsg('success', 'Setor removido.');
-    } else {
+    } else if (activeTab === 'responsaveis') {
       const { error } = await supabase.from('responsavel').delete().eq('id_responsavel', id);
       if (error) return showMsg('error', error.message);
       showMsg('success', 'Responsável removido.');
+    } else {
+      const { error } = await supabase.from('entrega_equipamento').delete().eq('id_entrega', id);
+      if (error) return showMsg('error', error.message);
+      showMsg('success', 'Registro de entrega removido.');
     }
     carregarDados();
+  }
+
+  function formatarDataBR(dataISO) {
+    if (!dataISO) return '—';
+    const [ano, mes, dia] = dataISO.split('-');
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  function gerarTextoTermo(item) {
+    return `TERMO DE RESPONSABILIDADE E GUARDA DE EQUIPAMENTO DE TI
+
+Pelo presente termo, o(a) colaborador(a) ${item.colaborador}${item.email_colaborador ? ` (${item.email_colaborador})` : ''}, usuário de rede "${item.usuario_rede}", declara ter recebido da equipe de Infraestrutura de TI o equipamento abaixo especificado, em perfeitas condições de funcionamento:
+
+• Equipamento / Modelo: ${item.modelo_maquina}
+• Número de Série (Serial): ${item.numero_serie}
+• Data de Entrega: ${formatarDataBR(item.data_entrega)}
+
+O(A) colaborador(a) compromete-se a zelar pela integridade física e lógica do equipamento, utilizá-lo exclusivamente para fins corporativos e devolvê-lo à TI em caso de desligamento ou substituição.
+
+____________________________________________________
+Assinatura do(a) Colaborador(a): ${item.colaborador}
+
+____________________________________________________
+Responsável TI (${session?.user?.email || 'Infraestrutura'})`;
+  }
+
+  function copiarTermo(item) {
+    navigator.clipboard.writeText(gerarTextoTermo(item));
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2500);
   }
 
   // Filtragem da tabela de ativos
@@ -199,6 +272,14 @@ export default function App() {
     const matchStatus = filterStatus ? a.status === filterStatus : true;
     return matchText && matchSetor && matchStatus;
   });
+
+  // Filtragem da tabela de entregas
+  const entregasFiltradas = entregas.filter(e =>
+    e.colaborador.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.usuario_rede.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.modelo_maquina.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    e.numero_serie.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   // TELA DE LOGIN
   if (!session) {
@@ -252,10 +333,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex bg-[#F4F7FB]">
-      {/* SIDEBAR ESCURA ESTILO FOTO 1 */}
+      {/* SIDEBAR ESCURA */}
       <aside className="w-16 bg-[#13254C] text-blue-200 flex flex-col items-center py-4 justify-between shrink-0 shadow-lg">
         <div className="flex flex-col items-center gap-6">
-          {/* Ícone da logo */}
           <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 64 64" fill="none">
               <path d="M32 10L14 20.5V43.5L32 54" stroke="#93C5FD" strokeWidth="6" strokeLinecap="round" />
@@ -271,14 +351,15 @@ export default function App() {
             {[
               { id: 'ativos', icon: Monitor, title: 'Ativos de TI' },
               { id: 'setores', icon: Building2, title: 'Setores' },
-              { id: 'responsaveis', icon: Users, title: 'Responsáveis' }
+              { id: 'responsaveis', icon: Users, title: 'Responsáveis TI' },
+              { id: 'entregas', icon: Laptop, title: 'Entregas & Termos' }
             ].map(item => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => { setActiveTab(item.id); setSearchTerm(''); }}
                   title={item.title}
                   className={`p-3 rounded-xl transition cursor-pointer ${
                     isActive ? 'bg-[#2D7FF9] text-white shadow-md' : 'text-blue-200/70 hover:bg-white/10 hover:text-white'
@@ -302,7 +383,7 @@ export default function App() {
 
       {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* TOPBAR AZUL COM ABAS ESTILO NAVEGADOR (FOTO 1) */}
+        {/* TOPBAR AZUL COM ABAS ESTILO NAVEGADOR */}
         <header className="bg-gradient-to-r from-[#1B3668] via-[#22488A] to-[#2D7FF9] text-white pt-3 px-6 shadow">
           <div className="flex items-center justify-between mb-3">
             <InfraTrackLogo light />
@@ -313,20 +394,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* Abas estilo navegador */}
-          <div className="flex items-end gap-1.5">
+          <div className="flex items-end gap-1.5 overflow-x-auto">
             {[
               { id: 'ativos', label: 'Ativos', icon: Monitor, count: ativos.length },
               { id: 'setores', label: 'Setores', icon: Building2, count: setores.length },
-              { id: 'responsaveis', label: 'Responsáveis', icon: Users, count: responsaveis.length }
+              { id: 'responsaveis', label: 'Responsáveis', icon: Users, count: responsaveis.length },
+              { id: 'entregas', label: 'Entregas / Termos', icon: Laptop, count: entregas.length }
             ].map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition cursor-pointer ${
+                  onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-semibold transition cursor-pointer shrink-0 ${
                     isActive
                       ? 'bg-[#F4F7FB] text-[#1B3668] shadow-sm'
                       : 'bg-[#13254C]/50 text-blue-100 hover:bg-[#13254C]/80'
@@ -370,10 +451,10 @@ export default function App() {
             </div>
             <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500">Setores Mapeados</p>
-                <p className="text-2xl font-bold text-[#1B3668] mt-0.5">{setores.length}</p>
+                <p className="text-xs font-medium text-slate-500">Notebooks Entregues</p>
+                <p className="text-2xl font-bold text-[#1B3668] mt-0.5">{entregas.length}</p>
               </div>
-              <div className="p-3 bg-blue-50 text-[#1B3668] rounded-xl"><Building2 className="w-5 h-5" /></div>
+              <div className="p-3 bg-blue-50 text-[#1B3668] rounded-xl"><Laptop className="w-5 h-5" /></div>
             </div>
           </div>
 
@@ -385,7 +466,7 @@ export default function App() {
             </div>
           )}
 
-          {/* BARRA DE FERRAMENTAS ESTILO FOTO 1 (PÍLULAS AZUIS + BUSCA) */}
+          {/* BARRA DE FERRAMENTAS */}
           <div className="bg-white p-3.5 rounded-2xl border border-blue-100 shadow-sm flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -427,21 +508,21 @@ export default function App() {
               )}
             </div>
 
-            {activeTab === 'ativos' && (
+            {(activeTab === 'ativos' || activeTab === 'entregas') && (
               <div className="relative flex-1 min-w-[220px] max-w-xs">
                 <Search className="w-4 h-4 text-[#2D7FF9] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Busca rápida por ativo, IP ou setor..."
+                  placeholder={activeTab === 'ativos' ? 'Busca rápida por ativo, IP ou setor...' : 'Buscar colaborador, usuário ou serial...'}
                   className="w-full pl-9 pr-4 py-1.5 bg-white text-slate-800 border border-[#2D7FF9]/40 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-[#2D7FF9]"
                 />
               </div>
             )}
           </div>
 
-          {/* TABELA PRINCIPAL ESTILO FOTO 1 */}
+          {/* TABELAS */}
           <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
             {activeTab === 'ativos' && (
               <div className="overflow-x-auto">
@@ -454,7 +535,7 @@ export default function App() {
                       <th className="py-3.5 px-4">Setor / Localização</th>
                       <th className="py-3.5 px-4">Endereço IP</th>
                       <th className="py-3.5 px-4">Endereço MAC</th>
-                      <th className="py-3.5 px-4">Responsável</th>
+                      <th className="py-3.5 px-4">Responsável TI</th>
                       <th className="py-3.5 px-4 text-right">Ações</th>
                     </tr>
                   </thead>
@@ -559,17 +640,70 @@ export default function App() {
                 </table>
               </div>
             )}
+
+            {activeTab === 'entregas' && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-3.5 px-4">Colaborador</th>
+                      <th className="py-3.5 px-4">Usuário de Rede</th>
+                      <th className="py-3.5 px-4">Modelo da Máquina</th>
+                      <th className="py-3.5 px-4">Nº de Série (Serial)</th>
+                      <th className="py-3.5 px-4">Data de Entrega</th>
+                      <th className="py-3.5 px-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {entregasFiltradas.map(item => (
+                      <tr key={item.id_entrega} className="hover:bg-[#F4F8FF] transition">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1B3668]">{item.colaborador}</div>
+                          <div className="text-[11px] text-slate-400">{item.email_colaborador || 'Sem e-mail'}</div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-700">{item.usuario_rede}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-800">{item.modelo_maquina}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{item.numero_serie}</td>
+                        <td className="py-3 px-4 text-slate-700">{formatarDataBR(item.data_entrega)}</td>
+                        <td className="py-3 px-4 text-right space-x-1.5">
+                          <button
+                            onClick={() => { setTermoSelecionado(item); setCopiado(false); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-[#EBF3FE] hover:bg-[#2D7FF9] text-[#1B3668] hover:text-white rounded-lg font-semibold transition cursor-pointer"
+                            title="Gerar Termo de Responsabilidade"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> Gerar Termo
+                          </button>
+                          <button onClick={() => abrirModalEditar(item)} className="p-1.5 text-[#2D7FF9] hover:bg-blue-50 rounded-lg transition cursor-pointer" title="Editar">
+                            <Pencil className="w-4 h-4 inline" />
+                          </button>
+                          <button onClick={() => excluirRegistro(item.id_entrega)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer" title="Excluir">
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {entregasFiltradas.length === 0 && (
+                      <tr><td colSpan="6" className="py-8 text-center text-slate-400">Nenhuma entrega de notebook registrada ainda.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>
 
-      {/* MODAL DE CADASTRO / EDIÇÃO (CAMPOS BRANCOS LIMPOS) */}
+      {/* MODAL DE CADASTRO / EDIÇÃO */}
       {modalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-blue-100 overflow-hidden">
             <div className="bg-[#1B3668] text-white px-6 py-4 flex items-center justify-between">
               <h3 className="font-bold text-base">
-                {editingId ? 'Editar Registro' : 'Novo Cadastro'} • {activeTab === 'ativos' ? 'Ativo de TI' : activeTab === 'setores' ? 'Setor' : 'Responsável'}
+                {editingId ? 'Editar Registro' : 'Novo Cadastro'} • {
+                  activeTab === 'ativos' ? 'Ativo de TI' :
+                  activeTab === 'setores' ? 'Setor' :
+                  activeTab === 'responsaveis' ? 'Responsável TI' : 'Entrega de Notebook'
+                }
               </h3>
               <button onClick={() => setModalOpen(false)} className="text-blue-200 hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
@@ -622,7 +756,7 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Responsável (Opcional)</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Responsável TI (Opcional)</label>
                     <select value={formAtivo.id_responsavel} onChange={e => setFormAtivo({ ...formAtivo, id_responsavel: e.target.value })}
                       className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm">
                       <option value="">Sem responsável definido</option>
@@ -672,6 +806,51 @@ export default function App() {
                 </>
               )}
 
+              {activeTab === 'entregas' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Nome do Colaborador *</label>
+                    <input required placeholder="Ex: Mariana Costa" value={formEntrega.colaborador}
+                      onChange={e => setFormEntrega({ ...formEntrega, colaborador: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Usuário de Rede / AD *</label>
+                      <input required placeholder="Ex: mcosta" value={formEntrega.usuario_rede}
+                        onChange={e => setFormEntrega({ ...formEntrega, usuario_rede: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">E-mail do Colaborador</label>
+                      <input type="email" placeholder="colaborador@empresa.com" value={formEntrega.email_colaborador}
+                        onChange={e => setFormEntrega({ ...formEntrega, email_colaborador: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Modelo da Máquina *</label>
+                    <input required placeholder="Ex: Dell Latitude 3420" value={formEntrega.modelo_maquina}
+                      onChange={e => setFormEntrega({ ...formEntrega, modelo_maquina: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Nº de Série (Serial) *</label>
+                      <input required placeholder="Ex: SN-DL3420-8841" value={formEntrega.numero_serie}
+                        onChange={e => setFormEntrega({ ...formEntrega, numero_serie: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Data de Entrega *</label>
+                      <input required type="date" value={formEntrega.data_entrega}
+                        onChange={e => setFormEntrega({ ...formEntrega, data_entrega: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <button type="button" onClick={() => setModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 cursor-pointer">
@@ -683,6 +862,48 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DO TERMO GERADO */}
+      {termoSelecionado && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-blue-100 overflow-hidden">
+            <div className="bg-[#1B3668] text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-300" />
+                <h3 className="font-bold text-base">Termo de Responsabilidade • {termoSelecionado.colaborador}</h3>
+              </div>
+              <button onClick={() => setTermoSelecionado(null)} className="text-blue-200 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-800 whitespace-pre-line font-sans leading-relaxed">
+                {gerarTextoTermo(termoSelecionado)}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <button
+                  onClick={() => copiarTermo(termoSelecionado)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#EBF3FE] hover:bg-[#DCE9FD] text-[#1B3668] transition cursor-pointer"
+                >
+                  {copiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  {copiado ? 'Texto copiado para o e-mail!' : 'Copiar texto para enviar por e-mail'}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#2D7FF9] hover:bg-[#1B3668] text-white shadow transition cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
