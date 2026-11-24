@@ -6,6 +6,7 @@ import {
   ShieldCheck, Laptop, FileText, Copy, Printer, Check
 } from 'lucide-react';
 
+// Logo fiel à imagem InfraTrack (Cubo de nós + Tipografia bicolor)
 function InfraTrackLogo({ light = false, size = 'md' }) {
   const iconSize = size === 'lg' ? 42 : 30;
   const textSize = size === 'lg' ? 'text-3xl' : 'text-xl';
@@ -258,6 +259,183 @@ Responsável TI (${session?.user?.email || 'Infraestrutura'})`;
     navigator.clipboard.writeText(gerarTextoTermo(item));
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2500);
+  }
+
+  function imprimirPDFLimpo(item) {
+    const janela = window.open('', '_blank', 'width=850,height=900');
+    if (!janela) return;
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    janela.document.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Termo de Responsabilidade - ${item.colaborador}</title>
+        <style>
+          @page { size: A4; margin: 22mm; }
+          body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #1e293b;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 3px solid #1B3668;
+            padding-bottom: 14px;
+            margin-bottom: 28px;
+          }
+          .brand {
+            font-size: 24px;
+            font-weight: 800;
+            color: #1B3668;
+            letter-spacing: -0.5px;
+          }
+          .brand span { color: #2D7FF9; }
+          .doc-meta {
+            text-align: right;
+            font-size: 11px;
+            color: #64748b;
+          }
+          h1 {
+            text-align: center;
+            font-size: 17px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #1B3668;
+            margin: 0 0 24px 0;
+          }
+          p {
+            font-size: 13px;
+            text-align: justify;
+            margin-bottom: 16px;
+          }
+          .specs-box {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-left: 4px solid #2D7FF9;
+            border-radius: 6px;
+            padding: 16px 20px;
+            margin: 22px 0;
+          }
+          .specs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+          .specs-table td {
+            padding: 6px 4px;
+          }
+          .specs-label {
+            font-weight: 700;
+            color: #1B3668;
+            width: 210px;
+          }
+          .clauses {
+            font-size: 12.5px;
+            color: #334155;
+            margin-top: 18px;
+          }
+          .clauses li {
+            margin-bottom: 8px;
+          }
+          .signatures {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            margin-top: 75px;
+          }
+          .sig-block {
+            flex: 1;
+            text-align: center;
+            border-top: 1px solid #334155;
+            padding-top: 8px;
+            font-size: 12px;
+          }
+          .sig-sub {
+            color: #64748b;
+            font-size: 11px;
+          }
+          .footer {
+            margin-top: 60px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 10px;
+            color: #94a3b8;
+            text-align: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="brand">Infra<span>Track</span></div>
+          <div class="doc-meta">
+            <strong>Gestão de Ativos & Infraestrutura de TI</strong><br/>
+            Registro Nº #${String(item.id_entrega).padStart(4, '0')} • Emitido em ${dataHoje}
+          </div>
+        </div>
+
+        <h1>Termo de Responsabilidade e Guarda de Equipamento</h1>
+
+        <p>
+          Pelo presente instrumento, o(a) colaborador(a) <strong>${item.colaborador}</strong>${item.email_colaborador ? `, e-mail corporativo <strong>${item.email_colaborador}</strong>` : ''},
+          identificado(a) pelo usuário de rede <strong>${item.usuario_rede}</strong>, declara ter recebido da equipe de Infraestrutura de TI,
+          a título de empréstimo para uso exclusivo em suas atividades profissionais, o equipamento descrito abaixo em perfeitas condições de uso e funcionamento:
+        </p>
+
+        <div class="specs-box">
+          <table class="specs-table">
+            <tr>
+              <td class="specs-label">Equipamento / Modelo:</td>
+              <td>${item.modelo_maquina}</td>
+            </tr>
+            <tr>
+              <td class="specs-label">Número de Série (Serial):</td>
+              <td><code>${item.numero_serie}</code></td>
+            </tr>
+            <tr>
+              <td class="specs-label">Usuário de Rede / AD:</td>
+              <td>${item.usuario_rede}</td>
+            </tr>
+            <tr>
+              <td class="specs-label">Data de Entrega:</td>
+              <td>${formatarDataBR(item.data_entrega)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p><strong>Condições de Uso e Guarda:</strong></p>
+        <ul class="clauses">
+          <li>Zelar pela integridade física e lógica do equipamento, comunicando imediatamente à equipe de TI qualquer defeito, perda, furto ou dano.</li>
+          <li>Não instalar softwares não homologados nem alterar configurações de segurança e rede sem autorização prévia da Infraestrutura.</li>
+          <li>Devolver o equipamento e seus acessórios nas mesmas condições em caso de desligamento, transferência de setor ou solicitação da empresa.</li>
+        </ul>
+
+        <div class="signatures">
+          <div class="sig-block">
+            <strong>${item.colaborador}</strong><br/>
+            <span class="sig-sub">Colaborador(a) • Usuário: ${item.usuario_rede}</span>
+          </div>
+          <div class="sig-block">
+            <strong>Infraestrutura de TI</strong><br/>
+            <span class="sig-sub">${session?.user?.email || 'Responsável Técnico'}</span>
+          </div>
+        </div>
+
+        <div class="footer">
+          Documento gerado eletronicamente pelo sistema InfraTrack • Controle de Inventário e Comodato de TI
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `);
+    janela.document.close();
   }
 
   // Filtragem da tabela de ativos
@@ -823,7 +1001,7 @@ Responsável TI (${session?.user?.email || 'Infraestrutura'})`;
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">E-mail do Colaborador</label>
-                      <input type="email" placeholder="colaborador@empresa.com" value={formEntrega.email_colaborador}
+                      <input type="email" placeholder="colaborador@empresa.com.br" value={formEntrega.email_colaborador}
                         onChange={e => setFormEntrega({ ...formEntrega, email_colaborador: e.target.value })}
                         className="w-full px-3.5 py-2 bg-white text-slate-900 border border-slate-300 rounded-xl text-sm" />
                     </div>
@@ -894,14 +1072,12 @@ Responsável TI (${session?.user?.email || 'Infraestrutura'})`;
                   {copiado ? 'Texto copiado para o e-mail!' : 'Copiar texto para enviar por e-mail'}
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => window.print()}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#2D7FF9] hover:bg-[#1B3668] text-white shadow transition cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
-                  </button>
-                </div>
+                <button
+                  onClick={() => imprimirPDFLimpo(termoSelecionado)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#2D7FF9] hover:bg-[#1B3668] text-white shadow transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
+                </button>
               </div>
             </div>
           </div>
