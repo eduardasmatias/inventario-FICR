@@ -81,13 +81,34 @@ export default function App() {
     if (session) carregarDados();
   }, [session]);
 
+  // Supabase Realtime: qualquer INSERT/UPDATE/DELETE feito no banco (pelo app,
+  // por outro usuário ou direto no Table Editor do Supabase) atualiza a tela na hora.
+  const [realtimeStatus, setRealtimeStatus] = useState('offline');
+  useEffect(() => {
+    if (!session) return;
+    let timer;
+    const recarregar = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => carregarDados(true), 300);
+    };
+    const channel = supabase.channel('inventario-realtime');
+    ['ativo', 'setor', 'responsavel', 'entrega_equipamento'].forEach((table) => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, recarregar);
+    });
+    channel.subscribe((status) => setRealtimeStatus(status === 'SUBSCRIBED' ? 'online' : 'offline'));
+    return () => {
+      clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
   const showMsg = (type, msg) => {
     setFeedback({ type, msg });
     setTimeout(() => setFeedback({ type: '', msg: '' }), 4000);
   };
 
-  async function carregarDados() {
-    setLoadingData(true);
+  async function carregarDados(silencioso) {
+    if (silencioso !== true) setLoadingData(true);
     const [resAtivos, resSetores, resResp, resEntregas] = await Promise.all([
       supabase.from('ativo').select('*, setor(nome, localizacao), responsavel(nome, email)').order('id_ativo', { ascending: false }),
       supabase.from('setor').select('*').order('nome'),
@@ -567,6 +588,13 @@ Responsável TI (${session?.user?.email || 'Infraestrutura'})`;
           <div className="flex items-center justify-between mb-3">
             <InfraTrackLogo light />
             <div className="flex items-center gap-3">
+              <span
+                title={realtimeStatus === 'online' ? 'Sincronizado com o Supabase Realtime' : 'Realtime desconectado'}
+                className="flex items-center gap-1.5 text-xs bg-white/15 px-3 py-1.5 rounded-full text-blue-50 font-medium"
+              >
+                <span className={`w-2 h-2 rounded-full ${realtimeStatus === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-gray-400'}`} />
+                {realtimeStatus === 'online' ? 'Ao vivo' : 'Offline'}
+              </span>
               <span className="text-xs bg-white/15 px-3 py-1.5 rounded-full text-blue-50 font-medium">
                 {session.user.email}
               </span>
