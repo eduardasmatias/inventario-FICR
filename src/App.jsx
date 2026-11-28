@@ -211,6 +211,7 @@ export default function App() {
   }
 
   async function excluirRegistro(id) {
+    if (!window.confirm(`Tem certeza que deseja excluir o registro #${id}? Esta ação não pode ser desfeita.`)) return;
     if (activeTab === 'ativos') {
       const { error } = await supabase.from('ativo').delete().eq('id_ativo', id);
       if (error) return showMsg('error', error.message);
